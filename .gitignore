@@ -47,3 +47,17 @@ po/*~
 
 # RStudio Connect folder
 rsconnect/
+
+/.quarto/
+
+# Index files
+index_files
+
+# Data (needs the most up to date from retraction watch)
+data/retraction_watch.csv
+
+# DS strore
+.DS_Store
+
+#Rproj
+RetractionWatchViz.Rproj

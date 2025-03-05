@@ -1,0 +1,352 @@
+---
+title: "Retraction Watch - A scrollytelling of paper retractions over the years"
+author: "Marie Corradi"
+date: "`r Sys.Date()`"
+title-block-style: default
+lang: en
+filters:
+    - openlinksinnewpage
+format: 
+  closeread-html:
+    css: usj.css
+    code-tools: false
+    fig-format: svg
+    toc: false
+    linkcolor: tomato
+---
+
+```{r packages}
+#| echo: false
+#| message: false
+library(tidyverse)
+library(sf)
+library(leaflet)
+library(patchwork)
+library(lubridate)
+library(forcats)
+library(RColorBrewer)
+
+# Load the retraction dataset
+papers <- read.csv("data/retraction_watch.csv")
+```
+
+```{r transfo}
+#| echo: false
+#| message: false
+#| warning: false
+retracted_papers <- filter(papers, RetractionNature=="Retraction")%>%
+  dplyr::mutate(RetractionDate = mdy_hm(RetractionDate),  RetractionYear = year(RetractionDate)) %>%
+  mutate(Highlight = ifelse(RetractionYear %in% c(2010, 2011), "Highlight", "Greyed"))%>%
+  filter(!is.na(RetractionYear) & is.finite(RetractionYear))
+
+retracted_papers_subject_long <- retracted_papers%>%
+  separate_rows(Subject, sep = ";")%>%
+  filter(Subject != "")%>%
+  dplyr::mutate(SubjectCode = gsub(".*\\((.*?)\\).*", "\\1", Subject))
+
+retracted_papers_reasons_long <- retracted_papers%>%
+  separate_rows(Reason, sep = ";")%>%
+  filter(Reason != "")%>%
+  mutate(Reason = gsub("\\+","",Reason))
+
+# Grouping of reasons - done manually
+reasons_groups <- read.csv("data/retraction_reasons_groups.csv")%>%
+  pivot_longer(cols = everything(), names_to = "Reason_group", values_to = "Reason")%>%
+  mutate(Reason_group = gsub("\\."," ", Reason_group))%>%
+  filter(Reason != "")
+
+
+# match reason group in original dataframe
+retracted_papers_reasons_long <- retracted_papers_reasons_long%>%
+  merge(reasons_groups, by="Reason", all.x=T)%>%
+  filter(RetractionYear>1999)%>%
+  mutate(Highlight2023 = ifelse(RetractionYear==2023, Reason_group, "Greyed"))%>%
+  mutate(Highlight2010 = ifelse(RetractionYear%in%c(2010,2011), Reason_group, "Greyed"))
+
+reasons_count <- count(retracted_papers_reasons_long,Reason_group)%>%
+  arrange(desc(n))
+
+
+## Data for reasons for retraction
+# Ensure we use the same color palette across
+unique_reasons <- unique(retracted_papers_reasons_long$Reason_group)
+num_reasons <- length(unique_reasons)
+
+# Generate a consistent color mapping
+color_palette_reasons <- setNames(colorRampPalette(brewer.pal(12, "Paired"))(num_reasons), unique_reasons)
+```
+
+# {.page-columns .page-full}
+## What is scrollytelling?
+["Scrollytelling is a storytelling technique that allows users to engage with a narrative as they scroll through a webpage."](https://insights.daffodilsw.com/blog/what-is-scrollytelling-and-how-to-tell-immersive-stories-with-design)
+
+My favorite scrollytelling website: [The Pudding](https://pudding.cool/2023/07/songwriters/)
+
+## What is Retraction Watch all about?
+
+::: {.column-screen style="background-image:url(https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Ftse2.mm.bing.net%2Fth%3Fid%3DOIP.mqy-lwrszG5F3MMksvAsxQHaEa%26pid%3DApi&f=1&ipt=75b6fbff4393d13b2db6095ed6220395243d7c8fcde2548fc4e085c573faab20&ipo=images); background-size: 75%; height: 1000px; background-position: center +4%; background-repeat: no-repeat;"}
+:::
+<figcaption>Retraction Watch logo. Source: [Retraction Watch](https://retractionwatch.com/2023/09/12/the-retraction-watch-database-becomes-completely-open-and-rw-becomes-far-more-sustainable/)</figcaption>
+
+
+
+\
+
+Retractions of scientific articles have widely increased in the past years (or so it seems), creating a general crisis for science's image with the public. In this we set out to explore Retraction Watch, a database collecting retracted articles. Retraction Watch collects data about articles that were retracted, corrected or with an expression of concern, as well as thos which were reinstated. It also gathers the reasons for the retraction and various other relevant details such as the subject of the article, publisher, authors, country of publishing, journal, date of retraction, etc.
+
+In the following we will focus on retracted papers. We use a cutoff date of 5th of February 2025.
+
+
+
+
+## Evolution over the years
+:::{.cr-section layout="sidebar-left"}
+:::{#cr-years}
+```{r years, fig.width=10, fig.cap="Retraction of papers over the years"}
+#| output: 'asis'
+#| fig-asp: 1.1
+#| warning: false
+suppressWarnings({ggplot(retracted_papers)+
+  geom_bar(aes(x=RetractionYear))+
+  theme_classic()+
+  labs(x="Retraction Year", y= "Number of papers")+
+  theme(axis.text=element_text(size=12),axis.title=element_text(size=14,face="bold"))+
+  theme(plot.background = element_rect(fill = "transparent", 
+                                       color = NA))})
+```
+:::
+
+:::{#cr-years-2}
+```{r years-2, fig.width=10, fig.cap="Retraction of papers over the years"}
+#| output: 'asis'
+#| fig-asp: 1.1
+#| warning: false
+suppressWarnings({ggplot(retracted_papers) + 
+  geom_bar(aes(x = RetractionYear, fill = Highlight)) + 
+  theme_classic() + 
+  labs(x = "Retraction Year", y = "Number of papers") + 
+  theme(
+    axis.text = element_text(size = 12),
+    axis.title = element_text(size = 14, face = "bold"),
+    plot.background = element_rect(fill = "transparent", color = NA),
+    legend.position = "none"
+  ) + 
+  scale_fill_manual(
+    values = c("Highlight" = "#FF5733",  
+               "Greyed" = "grey")  
+  )
+})
+```
+:::
+
+Let's first have a look at the general evolution of paper retraction over the years. @cr-years
+
+It is clear that the number of retracted papers has drastically increased in the past few years, in particular since the early 2000's.  
+
+@cr-years-2
+
+There was also a peak in what looks to be the early 2010's.
+
+:::
+
+## What about topics?
+
+:::{.cr-section layout="sidebar-left"}
+:::{#cr-years-topics}
+```{r years-topic, fig.width=10, fig.cap="Retraction Counts by Topic"}
+#| output: 'asis'
+#| fig-asp: 1.1
+#| warning: false
+ggplot(filter(retracted_papers_subject_long, RetractionYear>1999))+
+  geom_bar(aes(x=RetractionYear, fill=SubjectCode), position="stack")+
+  scale_fill_brewer(palette = "Dark2")+
+  theme_classic()+
+  labs(x="Retraction Year", y="Number of articles")+
+  theme(axis.text=element_text(size=12),axis.title=element_text(size=14,face="bold"))+
+  theme(
+    panel.background = element_blank(),  
+    plot.background = element_rect(fill = "transparent", color = NA),   
+    legend.background = element_blank(),
+    legend.position = "bottom"
+  )
+
+```
+:::
+:::{#cr-years-topics2}
+```{r years-topic2, fig.width=10, fig.cap="Retraction Counts by Topic"}
+#| output: 'asis'
+#| fig-asp: 1.1
+#| warning: false
+
+ggplot(filter(retracted_papers_subject_long, RetractionYear > 1999)) +
+  geom_bar(aes(x = RetractionYear, fill = SubjectCode), position = "stack") +
+  scale_fill_manual(
+    values = c(
+      "B/T" = "grey",
+      "BLS" = "#D95F02",  # Highlight Basic Life Sciences
+      "ENV" = "grey",  
+      "HSC" = "grey",  
+      "SOC" = "grey",  
+      "PHY" = "grey",  
+      "HUM" = "grey",  
+      "BUS" = "grey"   
+    )
+  ) +
+  theme_classic() +
+  labs(x = "Retraction Year", y = "Number of articles") +
+  theme(
+    axis.text = element_text(size = 12),
+    axis.title = element_text(size = 14, face = "bold"),
+    panel.background = element_blank(),
+    plot.background = element_rect(fill = "transparent", color = NA),
+    legend.background = element_blank(),
+    legend.position = "bottom"
+  )
+```
+:::
+
+
+
+We now focus on paper retraction in the 2000's. @cr-years-topics
+
+We are looking at the topics of the papers that were retracted. Each paper can correspond to multiple topics.
+
+- **B/T**: Business and Technology
+- **BLS**: Basic Life Sciences
+- **ENV**: Environmental Sciences
+- **HSC**: Health Sciences
+- **HUM**: Humanities
+- **PHY**: Physical Sciences
+- **SOC**: Social Sciences
+
+
+
+
+ @cr-years-topics2 Note that Life Science (BLS)  is covered a lot but also matches the original field of people from Retraction Watch, so tracking per general topic might not give a full picture.
+
+:::
+
+## Let's turn to reasons for retraction
+:::{.cr-section layout="sidebar-left"}
+:::{#cr-reasons}
+```{r reasons-bar, fig.width=10, fig.cap="Reasons for retraction"}
+#| output: 'asis'
+#| fig-asp: 1.1
+#| warning: false
+
+ggplot(reasons_count) +
+  geom_bar(aes(x = fct_reorder(Reason_group, n, .desc = TRUE), y = n, fill = Reason_group), 
+           stat = "identity") +
+  scale_fill_manual(values = color_palette_reasons) + 
+  theme_classic() +
+  labs(x = "Retraction Reason", y = "Number of Articles", fill="Reason") +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 45, hjust = 1, size = 12),
+        axis.text = element_text(size = 12),
+        axis.title = element_text(size = 14, face = "bold"))
+
+
+```
+:::
+
+:::{#cr-reasons2}
+```{r reasons-evolution, fig.width=10, fig.cap="Reasons for retraction"}
+#| output: 'asis'
+#| fig-asp: 1.1
+#| warning: false
+
+# Apply the same color mapping to the plot
+ggplot(filter(retracted_papers_reasons_long, RetractionYear > 1999)) +
+  geom_bar(aes(x = RetractionYear, fill = Reason_group), position = "stack") +
+  scale_fill_manual(values = color_palette_reasons) +  # Use the same color mapping
+  theme_classic() +
+  labs(x = "Retraction Year", y = "Number of articles", fill="Reason") +
+  theme(legend.position = "bottom",
+        axis.text = element_text(size = 12),
+        axis.title = element_text(size = 14, face = "bold"))
+
+
+```
+:::
+
+:::{#cr-reasons-2010}
+```{r reasons-evolution-2010, fig.width=10, fig.cap="Reasons for retraction"}
+#| output: 'asis'
+#| fig-asp: 1.1
+#| warning: false
+
+
+# Define the final color mapping
+color_mapping_2010 <- c(color_palette_reasons, "Greyed" = "grey80")  # Ensure grey is added for non-highlighted years
+
+# Plot
+ggplot(filter(retracted_papers_reasons_long, RetractionYear > 1999)) +
+  geom_bar(aes(x = RetractionYear, fill = Highlight2010), position = "stack") +
+  scale_fill_manual(values = color_mapping_2010) +
+  theme_classic() +
+  labs(x = "Retraction Year", y = "Number of articles", fill="Reason") +
+  theme(legend.position = "bottom",
+        axis.text = element_text(size = 12),
+        axis.title = element_text(size = 14, face = "bold"))
+
+
+```
+:::
+
+:::{#cr-reasons-2023}
+```{r reasons-evolution-2023, fig.width=10, fig.cap="Reasons for retraction"}
+#| output: 'asis'
+#| fig-asp: 1.1
+#| warning: false
+# Define the final color mapping
+color_mapping_2023 <- c(color_palette_reasons, "Greyed" = "grey80")  # Ensure grey is added for non-highlighted years
+
+# Plot
+ggplot(filter(retracted_papers_reasons_long, RetractionYear > 1999)) +
+  geom_bar(aes(x = RetractionYear, fill = Highlight2023), position = "stack") +
+  scale_fill_manual(values = color_mapping_2023) +
+  theme_classic() +
+  labs(x = "Retraction Year", y = "Number of articles", fill="Reason") +
+  theme(legend.position = "bottom",
+        axis.text = element_text(size = 12),
+        axis.title = element_text(size = 14, face = "bold"))
+
+
+```
+:::
+@cr-reasons We grouped reasons for retraction in overarching groups, as initially there were more than 100 distinct reasons.
+
+ 
+Again here papers can have multiple reasons for being retracted. 
+
+@cr-reasons2
+
+It seems like results and peer review are increasing concerns.
+
+@cr-reasons-2010
+
+The early 2010's retractions were mostly linked to general ethics reasons.
+
+@cr-reasons-2023
+
+2023 was a pretty bad year. Did we see the backlash of COVID papers?
+
+@cr-reasons2
+
+How will this look like after the Trump years?
+
+:::
+## What do I still want to do?
+
+- Clean up
+- Follow-up on questions
+- Add interactivity
+- Explore per country
+- Other questions that would be interesting?
+
+
+# {.page-columns .page-full}
+This document was created with [Quarto](https://quarto.org), [closeread](https://closeread.netlify.app) and [R](https://www.r-project.org). 
+
+\
+Credits to [Tamara Premrov & Matthias Schnetzer](https://mschnetzer.github.io/scrollytell_gemeindebau/) for the original theme and code that I shamelessly copied here.
